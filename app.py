@@ -3,27 +3,25 @@ import openai
 import os
 import base64
 
-api_key = os.getenv("RUNPOD_API_KEY")
-runpod_serverless_id = os.getenv("RUNPOD_SERVERLESS_ID")
-
-# endpoint_url = "https://api.openai.com/v1"
-endpoint_url = f"https://api.runpod.ai/v2/{runpod_serverless_id}/openai/v1"
-
-client = openai.AsyncClient(api_key=api_key, base_url=endpoint_url)
-
-# https://platform.openai.com/docs/models/gpt-4o
-# model_kwargs = {
-#     "model": "chatgpt-4o-latest",
-#     "temperature": 1.2,
-#     "max_tokens": 500
-# }
-
+# OPEN AI
+api_key = os.getenv("OPENAI_API_KEY")
+endpoint_url = "https://api.openai.com/v1"
 model_kwargs = {
-    "model": "mistralai/Mistral-7B-Instruct-v0.3",
-    "temperature": 0.3,
+    "model": "chatgpt-4o-latest",
+    "temperature": 1.2,
     "max_tokens": 500
 }
 
+# RUNPOD
+runpod_serverless_id = os.getenv("RUNPOD_SERVERLESS_ID")
+# endpoint_url = f"https://api.runpod.ai/v2/{runpod_serverless_id}/openai/v1"
+# model_kwargs = {
+#     "model": "mistralai/Mistral-7B-Instruct-v0.3",
+#     "temperature": 0.3,
+#     "max_tokens": 500
+# }
+
+client = openai.AsyncClient(api_key=api_key, base_url=endpoint_url)
 
 @cl.on_message
 async def on_message(message: cl.Message):
@@ -37,7 +35,7 @@ async def on_message(message: cl.Message):
         # Read the first image and encode it to base64
         with open(images[0].path, "rb") as f:
             base64_image = base64.b64encode(f.read()).decode('utf-8')
-        message_history.append({
+            message_history.append({
             "role": "user",
             "content": [
                 {
@@ -57,9 +55,9 @@ async def on_message(message: cl.Message):
 
     response_message = cl.Message(content="")
     await response_message.send()
-    
+
     # Pass in the full message history for each request
-    stream = await client.chat.completions.create(messages=message_history, 
+    stream = await client.chat.completions.create(messages=message_history,
                                                   stream=True, **model_kwargs)
     async for part in stream:
         if token := part.choices[0].delta.content or "":
