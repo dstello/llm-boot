@@ -25,7 +25,7 @@ def agent(inputs: dict) -> dict:
     return {
         "message": {
             "role": "assistant",
-            "content": result.choices[0].message.content
+          "content": result.choices[0].message.content
         }
     }
 
@@ -59,39 +59,95 @@ def correctness_evaluator(run, example) -> dict:
 
     Evaluate the response given by the agent:
     {response}
+
+Accuracy is the most important metric. The numbers in the answer should be correct, and the answer should be exhaustive based on the given data. Give a score based on the following:
+Accuracy Score (0-4):
+    4: The response is completely accurate and based on reliable data.
+    3: The response is mostly accurate with minor inaccuracies that do not significantly affect the overall correctness.
+    2: The response is partially accurate but contains some inaccuracies that could mislead the user.
+    1: The response is largely inaccurate and could lead to incorrect conclusions.
+    0: The response is completely inaccurate or unrelated to the question.
+
+Given the answer should be concise, and, if applicable, formatted in the as the user has asked, give a score based on the following:
+Formatting Score (0-4):
+    4: The response is well-formatted, easy to read, and follows a logical structure.
+    3: The response is generally well-formatted but has minor issues in structure or readability.
+    2: The response is somewhat disorganized, affecting readability and comprehension.
+    1: The response is poorly formatted, making it difficult to understand.
+    0: The response lacks any coherent formatting, rendering it unreadable.
+
+The answer should be clear and concise. Give a score based on the following:
+Clarity Score (0-4):
+    4: The response is clear, concise, and easy to understand, with no ambiguity.
+    3: The response is mostly clear but contains some ambiguous or unclear elements.
+    2: The response is somewhat unclear or contains jargon that may confuse the user.
+    1: The response is unclear and difficult to understand.
+    0: The response is completely unclear and incomprehensible.
+
+If the question asks for advice, guidance, or goals, give a score based on the following:
+Insight Score (0-4):
+    4: The response provides valuable insights and actionable advice tailored to the user's transaction data and needs.
+    3: The response offers useful insights but lacks depth or specific action steps.
+    2: The response provides limited insights that may not be very useful.
+    1: The response offers little to no insight or actionable advice.
+    0: The question does not ask for advice, guidance, or goals.
     
-    Score from 0-4:
-    4 = The response is returned in the correct format and is correct
-    3 = The response is returned in the correct format but is incorrect
-    2 = The response is partially correct, incomplete or has some issues
-    1 = The response is incorrect
-    0 = The response is completely incorrect, and may not even be related to the question
-    
-    Return only the number (0-4).
+    Return only the numbers (0-4) in a comma separated list: accuracy, formatting, clarity, insight.
     """
     
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": "You are an assistant to audit the correctness of a response given by an agent. Your job is to ensure the response is correct by evaluating it against the question.Respond only with a number 0-4."},
+            {"role": "system", "content": "You are an assistant to audit the correctness of a response given by the agent. Your job is to ensure the response is correct by evaluating it against the question. Respond only with numbers 0-4 in a comma separated list: accuracy, formatting, clarity, insight."},
             {"role": "user", "content": evaluation_prompt}
         ],
         temperature=0
     )
     
     try:
-        score = int(response.choices[0].message.content.strip())
-        return {
+        score = response.choices[0].message.content.strip().split(',')
+        score = [int(s) for s in score]
+        return [{
             "key": "correctness score",
-            "score": score / 4,  # Normalize to 0-1
-            "explanation": f"Response correctness score: {score}/4"
-        }
+            "score": score[0] / 4,  # Normalize to 0-1
+            "explanation": f"Response correctness score: {score[0]}/4"
+        },
+        {
+            "key": "formatting score",
+            "score": score[1] / 4,  # Normalize to 0-1
+            "explanation": f"Response formatting score: {score[1]}/4"
+        },
+        {
+            "key": "clarity score",
+            "score": score[2] / 4,  # Normalize to 0-1
+            "explanation": f"Response clarity score: {score[2]}/4"
+        },
+        {
+            "key": "insight score",
+            "score": score[3] / 4,  # Normalize to 0-1
+            "explanation": f"Response insight score: {score[3]}/4"
+        }]
     except ValueError:
-        return {
+        return [{
             "key": "correctness score",
             "score": 0,
             "explanation": "Failed to parse score"
-        }
+        },
+        {
+            "key": "formatting score",
+            "score": 0,
+            "explanation": "Failed to parse score"
+        },
+        {
+            "key": "clarity score",
+            "score": 0,
+            "explanation": "Failed to parse score"
+        },
+        {
+            "key": "insight score",
+            "score": 0,
+            "explanation": "Failed to parse score"
+        }]
 
 # List of evaluators to score the outputs of target task
 evaluators = [

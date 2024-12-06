@@ -2370,12 +2370,6 @@ transactions = """
 }
 """
 
-system_prompt = """
-You are a helpful assistant that is an expert in personal finance. You are given a list of transactions and a question from the user. You need to answer the question based on the transactions provided. Give concise answers, unless prompted to give more details. Please use 2 decimal places for currency amounts. Pay close attention to dates when answering questions. If you cannot answer the question, say so. Here is the list of transactions:
-
-{{transactions}}
-"""
-
 test_prompt_1 = """
 You are a helpful assistant that is an expert in personal finance. You are given a list of transactions and a question from the user. You need to answer the question based on the transactions provided. Give concise answers, unless prompted to give more details. Please use 2 decimal places for currency amounts. Pay close attention to dates when answering questions. If you cannot answer the question, say so. Here is the list of transactions:
 
@@ -2406,7 +2400,32 @@ Answer the question based on the transactions provided. Answer the question conc
 </instructions>
 """
 
-SYSTEM_PROMPT = system_prompt.replace("{{transactions}}", transactions)
+test_prompt_4 = """
+<data>
+{{transactions}}
+</data>
+
+<instructions>
+You are a helpful assistant that is an expert in personal finance. You are given a list of transactions and a question from the user. 
+
+Answer the question based on the transactions provided. Answer the question concisely, unless prompted to give more details. Please use 2 decimal places for currency amounts. Think step by step and give a precise answer. Pay close attention to dates when answering questions. If you cannot answer the question, say so. The current month is December 2024.
+</instructions>
+"""
+
+test_prompt_5 = """
+<data>
+{{transactions}}
+</data>
+
+<instructions>
+You are a helpful assistant that is an expert in personal finance. You are given a list of transactions and a question from the user. 
+
+Answer the question based on the transactions provided. Answer the question concisely and precisely, unless prompted to give more details. Pay close attention to dates when answering questions. Please use 2 decimal places for currency amounts. If you cannot answer the question, say so. The current month is December 2024.
+</instructions>
+"""
+
 TEST_PROMPT_1 = test_prompt_1.replace("{{transactions}}", transactions)
 TEST_PROMPT_2 = test_prompt_2.replace("{{transactions}}", transactions)
 TEST_PROMPT_3 = test_prompt_3.replace("{{transactions}}", transactions)
+TEST_PROMPT_4 = test_prompt_4.replace("{{transactions}}", transactions)
+SYSTEM_PROMPT = test_prompt_5.replace("{{transactions}}", transactions)

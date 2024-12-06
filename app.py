@@ -37,7 +37,7 @@ async def on_message(message: cl.Message):
     # Initialize message history with system prompt if empty
     if not message_history and ENABLE_SYSTEM_PROMPT:
         message_history.append({"role": "system", "content": SYSTEM_PROMPT})
-        
+
     # Processing images exclusively
     images = [file for file in message.elements if "image" in file.mime] if message.elements else []
 
