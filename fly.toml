@@ -6,8 +6,6 @@
 app = 'llm-boot'
 primary_region = 'sea'
 
-[build]
-
 [http_service]
   internal_port = 8000
   force_https = true
