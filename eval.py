@@ -17,15 +17,15 @@ def agent(inputs: dict) -> dict:
     ]
 
     result = client.chat.completions.create(
-        model="gpt-4o-turbo",
+        model="gpt-4o-mini",
         messages=messages,
-        temperature=0.2
+        temperature=1.2
     )
 
     return {
         "message": {
             "role": "assistant",
-          "content": result.choices[0].message.content
+            "content": result.choices[0].message.content
         }
     }
 
@@ -96,7 +96,7 @@ Insight Score (0-4):
     """
     
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-4-turbo-preview",
         messages=[
             {"role": "system", "content": "You are an assistant to audit the correctness of a response given by the agent. Your job is to ensure the response is correct by evaluating it against the question. Respond only with numbers 0-4 in a comma separated list: accuracy, formatting, clarity, insight."},
             {"role": "user", "content": evaluation_prompt}

@@ -6,13 +6,24 @@ from langsmith.wrappers import wrap_openai
 from langsmith import traceable
 from prompts import SYSTEM_PROMPT
 
+ENABLE_SYSTEM_PROMPT=True
+
 # OPEN AI
-api_key = os.getenv("OPENAI_API_KEY")
-endpoint_url = "https://api.openai.com/v1"
+# api_key = os.getenv("OPENAI_API_KEY")
+# endpoint_url = "https://api.openai.com/v1"
+# model_kwargs = {
+#     "model": "gpt-4-turbo",
+#     "temperature": 1.2,
+#     "max_tokens": 500
+# }
+
+# ANTHROPIC
+api_key = os.getenv("ANTHROPIC_API_KEY")
+endpoint_url = "https://api.anthropic.com/v1"
 model_kwargs = {
-    "model": "gpt-4o-turbo",
-    "temperature": 1.2,
-    "max_tokens": 500
+    "model": "claude-3-5-sonnet-20241022",
+    "temperature": 0.7,
+    "max_tokens": 500,
 }
 
 # RUNPOD
@@ -23,8 +34,6 @@ model_kwargs = {
 #     "temperature": 0.3,
 #     "max_tokens": 500
 # }
-
-ENABLE_SYSTEM_PROMPT=True
 
 client = wrap_openai(openai.AsyncClient(api_key=api_key, base_url=endpoint_url))
 
