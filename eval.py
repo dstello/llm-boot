@@ -1,158 +1,146 @@
 from openai import OpenAI
 from langsmith.wrappers import wrap_openai
 from langsmith import traceable, evaluate
-
+import weaviate
+from weaviate.classes.init import Auth
+from weaviate.classes.query import MetadataQuery
 from dotenv import load_dotenv
+import os
+
 load_dotenv()
 
-client = wrap_openai(OpenAI())
+# Initialize clients
+wcd_url = os.environ["WCD_URL"]
+wcd_api_key = os.environ["WCD_API_KEY"]
 
-from prompts import SYSTEM_PROMPT
+weaviate_client = weaviate.connect_to_weaviate_cloud(
+    cluster_url=wcd_url,
+    auth_credentials=Auth.api_key(wcd_api_key),
+    skip_init_checks=True
+)
+
+base_openai_client = OpenAI()
+openai_client = wrap_openai(base_openai_client)
+
+def get_answer(query: str, weaviate_client, openai_client) -> str:
+    """Get an answer using RAG pipeline"""
+    # 1. Generate embedding
+    response = openai_client.embeddings.create(
+        model="text-embedding-3-large",
+        input=query
+    )
+    query_embedding = response.data[0].embedding
+
+    # 2. Retrieve chunks
+    collection = weaviate_client.collections.get("TeslaCybertruck")
+    similar_texts = collection.query.near_vector(
+        near_vector=query_embedding,
+        limit=3,
+        return_properties=["text"],
+        return_metadata=MetadataQuery(distance=True)
+    )
+
+    # 3. Combine contexts
+    context_str = "\n\n---\n\n".join(
+        [doc.properties["text"] for doc in similar_texts.objects]
+    )
+    
+    # 4. Create prompt
+    prompt = f"""Answer the question using ONLY the information provided in the context below. 
+    Do not add any general knowledge or information not contained in the context.
+
+    Context:
+    {context_str}
+
+    Question: {query}
+
+    Answer:"""
+
+    # 5. Generate answer
+    response = openai_client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant that answers questions based on the provided context."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0
+    )
+
+    return response.choices[0].message.content
 
 @traceable
 def agent(inputs: dict) -> dict:
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        *inputs["messages"]
-    ]
-
-    result = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages,
-        temperature=1.2
+    """RAG agent that processes questions"""
+    question = inputs["messages"][-1]["content"]
+    
+    answer = get_answer(
+        query=question,
+        weaviate_client=weaviate_client,
+        openai_client=openai_client
     )
-
+    
     return {
         "message": {
             "role": "assistant",
-            "content": result.choices[0].message.content
+            "content": answer
         }
     }
 
-# The name or UUID of the LangSmith dataset to evaluate on.
-data = "llm-bootcamp-week-2"
-
-# A string to prefix the experiment name with.
-experiment_prefix = "week-2-dataset"
-
-def correctness_evaluator(run, example) -> dict:
-    """
-    Evaluates the correctness of the responses given by the agent
-    
-    Args:
-        run: Contains the run information including inputs and outputs
-        example: Contains the reference example if available
-    
-    Returns:
-        Dictionary with score (0-1) and explanation
-    """
-    # Extract the original LeetCode problem from inputs
+def answer_relevance_evaluator(run, example) -> dict:
+    """Evaluates the relevance and accuracy of the RAG system's answer"""
     question = run.inputs["inputs"]["messages"][-1]["content"]
+    generated_answer = run.outputs["message"]["content"]
+    reference_answer = example.outputs["message"]["content"]
     
-    # Extract the model's generated responses
-    response = run.outputs["message"]["content"]
-    
-    # Rest of the evaluation logic remains the same
     evaluation_prompt = f"""
-    Given this question:
-    {question}
-
-    Evaluate the response given by the agent:
-    {response}
-
-Accuracy is the most important metric. The numbers in the answer should be correct, and the answer should be exhaustive based on the given data. Give a score based on the following:
-Accuracy Score (0-4):
-    4: The response is completely accurate and based on reliable data.
-    3: The response is mostly accurate with minor inaccuracies that do not significantly affect the overall correctness.
-    2: The response is partially accurate but contains some inaccuracies that could mislead the user.
-    1: The response is largely inaccurate and could lead to incorrect conclusions.
-    0: The response is completely inaccurate or unrelated to the question.
-
-Given the answer should be concise, and, if applicable, formatted in the as the user has asked, give a score based on the following:
-Formatting Score (0-4):
-    4: The response is well-formatted, easy to read, and follows a logical structure.
-    3: The response is generally well-formatted but has minor issues in structure or readability.
-    2: The response is somewhat disorganized, affecting readability and comprehension.
-    1: The response is poorly formatted, making it difficult to understand.
-    0: The response lacks any coherent formatting, rendering it unreadable.
-
-The answer should be clear and concise. Give a score based on the following:
-Clarity Score (0-4):
-    4: The response is clear, concise, and easy to understand, with no ambiguity.
-    3: The response is mostly clear but contains some ambiguous or unclear elements.
-    2: The response is somewhat unclear or contains jargon that may confuse the user.
-    1: The response is unclear and difficult to understand.
-    0: The response is completely unclear and incomprehensible.
-
-If the question asks for advice, guidance, or goals, give a score based on the following:
-Insight Score (0-4):
-    4: The response provides valuable insights and actionable advice tailored to the user's transaction data and needs.
-    3: The response offers useful insights but lacks depth or specific action steps.
-    2: The response provides limited insights that may not be very useful.
-    1: The response offers little to no insight or actionable advice.
-    0: The question does not ask for advice, guidance, or goals.
+    Question: {question}
     
-    Return only the numbers (0-4) in a comma separated list: accuracy, formatting, clarity, insight.
+    Generated Answer: {generated_answer}
+    
+    Reference Answer: {reference_answer}
+    
+    Score the generated answer from 0-5:
+    5 = Perfect match with reference, complete and accurate
+    4 = Very good, minor differences from reference
+    3 = Acceptable, but missing some details or slightly inaccurate
+    2 = Partially correct but significant omissions or inaccuracies
+    1 = Mostly incorrect or irrelevant
+    0 = Completely wrong or unrelated
+    
+    Return only the number (0-5).
     """
     
-    response = client.chat.completions.create(
-        model="gpt-4-turbo-preview",
+    response = openai_client.chat.completions.create(
+        model="gpt-4",
         messages=[
-            {"role": "system", "content": "You are an assistant to audit the correctness of a response given by the agent. Your job is to ensure the response is correct by evaluating it against the question. Respond only with numbers 0-4 in a comma separated list: accuracy, formatting, clarity, insight."},
+            {"role": "system", "content": "You are an evaluation assistant. Respond only with a number 0-5."},
             {"role": "user", "content": evaluation_prompt}
         ],
         temperature=0
     )
     
     try:
-        score = response.choices[0].message.content.strip().split(',')
-        score = [int(s) for s in score]
-        return [{
-            "key": "correctness score",
-            "score": score[0] / 4,  # Normalize to 0-1
-            "explanation": f"Response correctness score: {score[0]}/4"
-        },
-        {
-            "key": "formatting score",
-            "score": score[1] / 4,  # Normalize to 0-1
-            "explanation": f"Response formatting score: {score[1]}/4"
-        },
-        {
-            "key": "clarity score",
-            "score": score[2] / 4,  # Normalize to 0-1
-            "explanation": f"Response clarity score: {score[2]}/4"
-        },
-        {
-            "key": "insight score",
-            "score": score[3] / 4,  # Normalize to 0-1
-            "explanation": f"Response insight score: {score[3]}/4"
-        }]
+        score = int(response.choices[0].message.content.strip())
+        return {
+            "key": "answer_relevance",
+            "score": score / 5,  # Normalize to 0-1
+            "explanation": f"Answer relevance score: {score}/5"
+        }
     except ValueError:
-        return [{
-            "key": "correctness score",
+        return {
+            "key": "answer_relevance",
             "score": 0,
             "explanation": "Failed to parse score"
-        },
-        {
-            "key": "formatting score",
-            "score": 0,
-            "explanation": "Failed to parse score"
-        },
-        {
-            "key": "clarity score",
-            "score": 0,
-            "explanation": "Failed to parse score"
-        },
-        {
-            "key": "insight score",
-            "score": 0,
-            "explanation": "Failed to parse score"
-        }]
+        }
 
-# List of evaluators to score the outputs of target task
-evaluators = [
-    correctness_evaluator
-]
+# The name or UUID of the LangSmith dataset to evaluate on
+data = "rag_evaluation_dataset"
+
+# A string to prefix the experiment name with
+experiment_prefix = "RAG Test Dataset Evaluation"
+
+# List of evaluators
+evaluators = [answer_relevance_evaluator]
 
 # Evaluate the target task
 results = evaluate(
@@ -161,3 +149,6 @@ results = evaluate(
     evaluators=evaluators,
     experiment_prefix=experiment_prefix
 )
+
+# Clean up
+weaviate_client.close()

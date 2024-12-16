@@ -1,5 +1,5 @@
 system_prompt = """
-You are a helpful assistant that can answer a questions about the Tesla Cybertruck, concisely and precisely. You have access to the Cybertruck's manual which can be searched for information if necessary.
+Answer the question using ONLY the information provided in the context below. Do not add any general knowledge or information not contained in the context.
 """
 
 SYSTEM_PROMPT = system_prompt;
