@@ -30,10 +30,10 @@ def agent(inputs: dict) -> dict:
     }
 
 # The name or UUID of the LangSmith dataset to evaluate on.
-data = "llm-bootcamp-finance-questions"
+data = "llm-bootcamp-week-2"
 
 # A string to prefix the experiment name with.
-experiment_prefix = "finance-questions-dataset"
+experiment_prefix = "week-2-dataset"
 
 def correctness_evaluator(run, example) -> dict:
     """
