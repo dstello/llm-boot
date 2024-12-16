@@ -4,7 +4,9 @@ import openai
 
 from weaviate.classes.init import Auth
 from langsmith.wrappers import wrap_openai
+from dotenv import load_dotenv
 
+load_dotenv()
 
 # OPEN AI
 api_key = os.getenv("OPENAI_API_KEY")
@@ -17,7 +19,7 @@ model_kwargs = {
 smol_model_kwargs = {
     "model": "gpt-4o-mini",
     "temperature": 0,
-    "max_tokens": 500
+    "max_tokens": 200
 }
 
 # ANTHROPIC
