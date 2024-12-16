@@ -6,6 +6,14 @@ from langsmith.wrappers import wrap_openai
 from langsmith import traceable
 from prompts import SYSTEM_PROMPT
 
+import weaviate
+from weaviate.classes.init import Auth
+from weaviate.classes.query import MetadataQuery
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
 ENABLE_SYSTEM_PROMPT=True
 
 # OPEN AI
@@ -35,7 +43,17 @@ model_kwargs = {
 #     "max_tokens": 500
 # }
 
-client = wrap_openai(openai.AsyncClient(api_key=api_key, base_url=endpoint_url))
+# Initialize clients
+wcd_url = os.environ["WCD_URL"]
+wcd_api_key = os.environ["WCD_API_KEY"]
+
+weaviate_client = weaviate.connect_to_weaviate_cloud(
+    cluster_url=wcd_url,
+    auth_credentials=Auth.api_key(wcd_api_key),
+    skip_init_checks=True
+)
+
+openai_client = wrap_openai(openai.AsyncClient(api_key=api_key, base_url=endpoint_url))
 
 @cl.on_message
 @traceable
@@ -48,36 +66,37 @@ async def on_message(message: cl.Message):
         message_history.append({"role": "system", "content": SYSTEM_PROMPT})
 
     # Processing images exclusively
-    images = [file for file in message.elements if "image" in file.mime] if message.elements else []
+    # images = [file for file in message.elements if "image" in file.mime] if message.elements else []
 
-    if images:
-        # Read the first image and encode it to base64
-        with open(images[0].path, "rb") as f:
-            base64_image = base64.b64encode(f.read()).decode('utf-8')
-            message_history.append({
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": message.content if message.content else "What’s in this image?"
-                },
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{base64_image}"
-                    }
-                }
-            ]
-        })
-    else:
-        message_history.append({"role": "user", "content": message.content})
+    # if images:
+    #     # Read the first image and encode it to base64
+    #     with open(images[0].path, "rb") as f:
+    #         base64_image = base64.b64encode(f.read()).decode('utf-8')
+    #         message_history.append({
+    #         "role": "user",
+    #         "content": [
+    #             {
+    #                 "type": "text",
+    #                 "text": message.content if message.content else "What’s in this image?"
+    #             },
+    #             {
+    #                 "type": "image_url",
+    #                 "image_url": {
+    #                     "url": f"data:image/jpeg;base64,{base64_image}"
+    #                 }
+    #             }
+    #         ]
+    #     })
+    # else:
+    
+    message_history.append({"role": "user", "content": message.content})
 
     response_message = cl.Message(content="")
     await response_message.send()
 
     # Pass in the full message history for each request
-    stream = await client.chat.completions.create(messages=message_history,
-                                                  stream=True, **model_kwargs)
+    stream = await openai_client.chat.completions.create(messages=message_history, stream=True, **model_kwargs)
+    
     async for part in stream:
         if token := part.choices[0].delta.content or "":
             await response_message.stream_token(token)
